@@ -33,6 +33,42 @@ def proxy_server(webserver, port, conn, client_data, addr):
         sys.exit(1)
 
 
+def proxy_server_https(webserver, port, conn, client_data, addr):
+        # we create a new socket that will send the request for the client
+    global server_socket
+    try:
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_socket.connect((webserver, port))
+        server_socket.send(client_data.encode('utf-8'))
+        response = server_socket.recv(1024)
+        if response.startswith(b'HTTP/1.1 200 OK'):
+            conn.sendall(b'HTTP/1.0 200 Connection established\r\n\r\n')
+            print("[*]Connexion established")
+
+        while True:
+            response = server_socket.recv(buffer_size)
+
+            try:
+                request = conn.recv(buffer_size)
+                server_socket.sendall(request)
+            except socket.error as err:
+                pass
+
+            try:
+                reply = server_socket.recv(buffer_size)
+                conn.sendall(reply)
+            except socket.error as e:
+                pass
+            server_socket.close()
+            conn.close()
+    except socket.error:
+        server_socket.close()
+        conn.close()
+        sys.exit(1)
+        print("[/\/\/\]error[/\/\/\]")
+    pass
+
+
 def conn_string(conn, client_data: bytes, addr):
     """
     This function take the client request and find the webserver dns and the port of the request.
@@ -45,7 +81,7 @@ def conn_string(conn, client_data: bytes, addr):
     # print("CLIENT DATA: ", client_data)
     try:
         first_line = client_data.split('\n')[0]
-        print(f'First line : {first_line}')
+        print(f'\n\nRequest : {first_line}')
         url = first_line.split(' ')[1]
         http_pos = url.find("://")  # Find the pos of ://
         if (http_pos == -1):
@@ -66,7 +102,10 @@ def conn_string(conn, client_data: bytes, addr):
             port = int((temp[port_pos + 1:])[:webserver_pos - port_pos - 1])
             webserver = temp[:port_pos]
         print(f'Webserver : {webserver} \nPort : {port}')
-        proxy_server(webserver, port, conn, client_data, addr)
+        if client_data[0:7]=="CONNECT":
+            proxy_server_https(webserver, port, conn, client_data, addr)
+        else:
+            proxy_server(webserver, port, conn, client_data, addr)
     except Exception as e:
         print("ERRR", e)
 
