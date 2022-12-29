@@ -1,6 +1,7 @@
 from _thread import start_new_thread
 import socket, sys
 import threading
+import ssl
 
 listening_port = 8080
 max_conn = 5
@@ -8,20 +9,60 @@ buffer_size = 4096
 
 
 def proxy_server(webserver, port, conn, client_data, addr):
-    # we create a new socket that will send the request for the client
-    global server_socket
+    method = client_data.split(" ")[0]
+    if (method == "GET"):
+        http_request(webserver, port, conn, client_data, addr)
+    elif (method == "CONNECT"):
+        # we create a new socket that will send the request for the client
+        https_request(webserver, port, conn, client_data, addr)
+    else:
+        print("Unknown methode")
+        raise
+
+
+def https_request(webserver, port, conn, client_data, addr):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # If successful, send 200 code response
+        s.connect((webserver, port))
+        reply = "HTTP/1.0 200 Connection established\r\n"
+        reply += "Proxy-agent: SigmaIDU\r\n"
+        reply += "\r\n"
+        conn.sendall(reply.encode())
+    except socket.error as err:
+        pass
+    conn.setblocking(0)
+    s.setblocking(0)
+    while True:
+        try:
+            request = conn.recv(buffer_size)
+            s.sendall(request)
+        except socket.error as err:
+            pass
+
+        try:
+            reply = s.recv(buffer_size)
+            conn.sendall(reply)
+        except socket.error as e:
+            pass
+
+
+
+
+
+def http_request(webserver, port, conn, client_data, addr):
+    global server_socket
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
         server_socket.connect((webserver, port))
         server_socket.send(client_data.encode('utf-8'))
 
         while True:
             response = server_socket.recv(buffer_size)
-
             if (len(response) > 0):
                 conn.send(response)
                 print(f'[*] Request done ! {addr[0]}')
-                print('Response : ',response)
+                print('Response : ', response)
             else:
                 conn.send(response)
                 break
@@ -45,7 +86,7 @@ def conn_string(conn, client_data: bytes, addr):
     # print("CLIENT DATA: ", client_data)
     try:
         first_line = client_data.split('\n')[0]
-        print(f'First line : {first_line}')
+        print(f'\n\nFirst line : {first_line}')
         url = first_line.split(' ')[1]
         http_pos = url.find("://")  # Find the pos of ://
         if (http_pos == -1):
