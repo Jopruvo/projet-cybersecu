@@ -136,7 +136,6 @@ def start():
         try:
             conn, addr = client_socket.accept()
             client_data = conn.recv(buffer_size)
-            # threading.Thread(target=conn_string, args=(conn, client_data, addr))
             start_new_thread(conn_string, (conn, client_data, addr))
         except KeyboardInterrupt:
             client_socket.close()
