@@ -1,5 +1,5 @@
 from Cryptodome.PublicKey import RSA
-from tools.rsa_fct import encrypt_message, decrypt_message
+from rsa_fct import encrypt_message, decrypt_message
 import socket
 
 
@@ -13,7 +13,6 @@ def init_sock(host: str, port: int) -> socket:
 def send_message(ciphertext: bytes, port):
     # Initialisation des sockets
     server_sock = init_sock('localhost', port)
-    print()
 
     # Génération de la clé publique et privée RSA
     rsa_keys = RSA.generate(2048)
@@ -22,26 +21,41 @@ def send_message(ciphertext: bytes, port):
     # Envoi de la clé publique RSA au destinataire
     client_public_key = rsa_keys.publickey().export_key('PEM')
     server_sock.send(client_public_key)
-    print('[*] Client public key sent')
+    print('[SEND] Client public key sent')
 
     # On recoit la clef public du serv
     serv_public_key_bytes = server_sock.recv(2048)
     serv_public_key_rsa_key = RSA.import_key(serv_public_key_bytes)
-    print('[*] Server public key received !')
+    print('[SEND] Server public key received !')
 
-    # On envoie le message crypté avec la clef publique du serveur au serveur
+
+
+    # [ALLER] Envoie du message crypté
     chunk_size = 128
     chunks = [ciphertext[i:i + chunk_size] for i in range(0, len(ciphertext), chunk_size)]
+    encrypted_request=b""
     for chunk in chunks:
-
-        server_sock.send(encrypt_message(serv_public_key_rsa_key, chunk))
-
-    # On recoit la rep crypté du serv
-    server_rep = server_sock.recv(1024)
-
-    # Affichage du message décrypté
-    print("Server response :", decrypt_message(rsa_keys, server_rep))
+        encrypted_request+=encrypt_message(serv_public_key_rsa_key, chunk)+b";"
+    print("\n[SEND] encrypted request: "+str(encrypted_request[:-1]))
+    server_sock.send(encrypted_request[:-1])
 
 
 
-# send_message(b"My request")
+
+
+    #[RETOUR] Reception du message crypté
+    decr_client_request = b''
+    try:
+        encrypt_response = server_sock.recv(2048)
+        print("\n[SEND]"+str(encrypt_response))
+        encrypt_chunk_list = encrypt_response.split(b";")
+        
+        for chunk in encrypt_chunk_list:
+            decr_client_request+=bytes(decrypt_message(rsa_keys, chunk), 'latin-1')
+    except socket.error as e:
+        print("[ERROR] -"+e)
+
+    print("\n[SEND]"+str(decr_client_request))
+    print("\n[SEND]"+str(len(decr_client_request)))
+
+
