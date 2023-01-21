@@ -9,9 +9,10 @@ import socket
 listening_port = 8081
 max_conn = 5
 buffer_size = 4096
-
+client_public_key_rsa_key=b''
 
 def proxy_server(webserver, port, conn, client_data, addr):
+    print("proxy_server")
     method = client_data.split(" ")[0]
     try:
         if (method == "CONNECT"):
@@ -25,10 +26,10 @@ def proxy_server(webserver, port, conn, client_data, addr):
 
 
 def https_request(webserver, port, conn, client_data, addr):
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         # If successful, send 200 code response
-        server_socket.connect((webserver, port))
+        s.connect((webserver, port))
         reply = "HTTP/1.0 200 Connection established\r\n"
         reply += "Proxy-agent: SigmaIDU\r\n"
         reply += "\r\n"
@@ -36,22 +37,27 @@ def https_request(webserver, port, conn, client_data, addr):
     except socket.error as err:
         pass
     conn.setblocking(0)
-    server_socket.setblocking(0)
+    s.setblocking(0)
     while True:
         try:
             request = conn.recv(buffer_size)
-            server_socket.sendall(request)
+            if request != b'':
+                print("request: " + str(request))
+            s.sendall(request)
         except socket.error as err:
+            #print("error1: "+ str(err))
             pass
 
         try:
-            response = server_socket.recv(buffer_size)
-            return response
-        except socket.error as e:
+            reply = s.recv(buffer_size)
+            conn.sendall(reply)
+        except socket.error as err:
+            #print("error1: "+ str(err))
             pass
 
 
 def http_request(webserver, port, conn, client_data, addr):
+    print("http")
     global server_socket
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
@@ -61,11 +67,13 @@ def http_request(webserver, port, conn, client_data, addr):
         while True:
             response = server_socket.recv(buffer_size)
             if (len(response) > 0):
-                conn.send(response)
-                print(f'[*] Request done ! {addr[0]}')
-                print('Response : ', response)
+                send_response(conn,response)
+                # print(f'[*] Request done ! {addr[0]}')
+                # print('Response : ', response)
             else:
-                return response
+                break
+        server_socket.close()
+        conn.close()
 
     except socket.error:
         server_socket.close()
@@ -106,13 +114,14 @@ def conn_string(conn, client_data: bytes, addr):
             port = int((temp[port_pos + 1:])[:webserver_pos - port_pos - 1])
             webserver = temp[:port_pos]
         print(f'Webserver : {webserver} \nPort : {port}')
-        return proxy_server(webserver, port, conn, client_data, addr)
+        proxy_server(webserver, port, conn, client_data, addr)
     except Exception as e:
         print("ERRR", e)
         sys.exit(1)
 
 
-def reciev(client_conn,client_public_key_bytes,addr):
+def reciev_request(client_conn,client_public_key_bytes,addr):
+    global client_public_key_rsa_key
     # on génére les clef du cryptage tools
     print("listening on "+str(addr))
     rsa_keys = RSA.generate(2048)
@@ -123,12 +132,12 @@ def reciev(client_conn,client_public_key_bytes,addr):
     # On recoit la pub rsa_keys du client
     client_public_key_rsa_key = RSA.import_key(client_public_key_bytes)
     #vraiment necessaire de le faire à chaque requête?
-    print('[RECEIVE] Client public rsa_keys received !')
+    print('[*] Client public rsa_keys received !')
 
     # Envoi de la clé publique RSA au sendeur
     serv_public_key = rsa_keys.publickey().export_key('PEM')
     client_conn.send(serv_public_key)
-    print('[RECEIVE] Server public rsa_keys sent !')
+    print('[*] Server public rsa_keys sent !')
 
 
     # [ALLER] Reception du message crypté
@@ -145,20 +154,16 @@ def reciev(client_conn,client_public_key_bytes,addr):
     # Décryptage du message Affichage du message décrypté
  
     print("\n[RECEIVE]full decrypted message: ", decr_client_request)
-    print("[RECEIVE]full decrypted message lenght: ", len(decr_client_request))
-    response = conn_string(client_conn, decr_client_request, addr)
-    #[RETOUR] Envoie du message crypté
+    conn_string(client_conn, decr_client_request, addr)
 
-    if response:
-        encrypted_response = b""
-        chunks = [response[i:i + chunk_size] for i in range(0, len(response), chunk_size)]
-        for chunk in chunks:
-            encrypted_response+=encrypt_message(client_public_key_rsa_key, chunk)+b";"
-        client_conn.send(encrypted_response[:-1])
-        print('\n[RECEIVE] sending: '+str(encrypted_response[:-1]))
-
-    client_conn.close()
-    print("[*] Socket closed")
+def send_response(client_conn,response):
+    global client_public_key_rsa_key
+    chunk_size = 128
+    encrypted_response = b""
+    chunks = [response[i:i + chunk_size] for i in range(0, len(response), chunk_size)]
+    for chunk in chunks:
+        encrypted_response+=encrypt_message(client_public_key_rsa_key, chunk)+b";"
+    client_conn.send(encrypted_response[:-1])
 
 
 
@@ -178,10 +183,11 @@ def start():
         try:
             conn, addr = client_socket.accept()
             client_public_key_bytes = conn.recv(buffer_size)
-            start_new_thread(reciev, (conn, client_public_key_bytes, addr))
+            start_new_thread(reciev_request, (conn, client_public_key_bytes, addr))
         except KeyboardInterrupt:
             client_socket.close()
             print(f"[*] KeyboardInterrupt :-> Proxy server Shutting Down")
             sys.exit()
 
 start()
+

@@ -36,14 +36,17 @@ def https_request(webserver, port, conn, client_data, addr):
     while True:
         try:
             request = conn.recv(buffer_size)
+            print("request: " + str(request))
             s.sendall(request)
         except socket.error as err:
+            #print("error1: "+ str(err))
             pass
 
         try:
             reply = s.recv(buffer_size)
             conn.sendall(reply)
-        except socket.error as e:
+        except socket.error as err:
+            #print("error1: "+ str(err))
             pass
 
 
@@ -61,7 +64,6 @@ def http_request(webserver, port, conn, client_data, addr):
                 print(f'[*] Request done ! {addr[0]}')
                 print('Response : ', response)
             else:
-                conn.send(response)
                 break
         server_socket.close()
         conn.close()

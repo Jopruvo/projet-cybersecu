@@ -27,7 +27,7 @@ def init_sock(host: str, port: int) -> socket:
     return server_sock
 
 
-def send_message(conn,ciphertext: bytes, sending_port):
+def send_request(ciphertext: bytes):
     print("\n[*] NEW REQUEST ->"+str(ciphertext)+"\n")
     # Initialisation des sockets
     server_sock = init_sock('localhost', sending_port)
@@ -39,14 +39,12 @@ def send_message(conn,ciphertext: bytes, sending_port):
     # Envoi de la clé publique RSA au destinataire
     client_public_key = rsa_keys.publickey().export_key('PEM')
     server_sock.send(client_public_key)
-    print('[SEND] Client public key sent')
+    print('[*] Client public key sent')
 
     # On recoit la clef public du serv
     serv_public_key_bytes = server_sock.recv(2048)
     serv_public_key_rsa_key = RSA.import_key(serv_public_key_bytes)
-    print('[SEND] Server public key received !')
-
-
+    print('[*] Server public key received !')
 
     # [ALLER] Envoie de la requête crypté
     chunk_size = 128
@@ -54,27 +52,31 @@ def send_message(conn,ciphertext: bytes, sending_port):
     encrypted_request=b""
     for chunk in chunks:
         encrypted_request+=encrypt_message(serv_public_key_rsa_key, chunk)+b";"
-    print("\n[SEND] encrypted request: "+str(encrypted_request[:-1]))
+    print("\n[*] encrypted request: "+str(encrypted_request[:-1]))
     server_sock.send(encrypted_request[:-1])
+    receive_response(server_sock,rsa_keys)
 
 
+
+def receive_response(server_sock,rsa_keys):
     #[RETOUR] Reception de la réponse crypté
-    decr_client_request = b''
+    decr_client_response = b''
     try:
-        encrypt_response = server_sock.recv(2048)
-        print("\n[SEND]"+str(encrypt_response))
+        encrypt_response = server_sock.recv(8192)
+        print("\n[*] encrypt response: "+str(len(encrypt_response)))
         encrypt_chunk_list = encrypt_response.split(b";")
         
         for chunk in encrypt_chunk_list:
-            decr_client_request+=bytes(decrypt_message(rsa_keys, chunk), 'latin-1')
+            decr_client_response+=bytes(decrypt_message(rsa_keys, chunk), 'latin-1')
     except socket.error as e:
         print("[ERROR] -"+e)
-    print("\n[SEND]"+str(decr_client_request))
-    print("\n[SEND]"+str(len(decr_client_request)))
-    conn.send(decr_client_request)
+    print("\n[*] decrypted response"+str(len(decr_client_response)))
+    conn.send(decr_client_response)
+
 
 
 def start():
+    global conn
     try:
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # init socket
         print("[*] Initializing Sockets")
@@ -90,7 +92,7 @@ def start():
         try:
             conn, addr = client_socket.accept()
             client_data = conn.recv(buffer_size)
-            start_new_thread(send_message, (conn,client_data, sending_port))
+            start_new_thread(send_request, (client_data,))
         except KeyboardInterrupt:
             client_socket.close()
             print(f"[*] KeyboardInterrupt :-> Proxy server Shutting Down")
