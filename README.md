@@ -1,4 +1,3 @@
-# projet-cybersecu
 Projet d'INFO731 avec TAKAHASHI &amp; GONAY &amp; OUKZIZ &amp; BOUGHAMNI &amp; Moi-même
 liens utile : https://pycryptodome.readthedocs.io/en/latest/src/installation.html
 
@@ -21,9 +20,6 @@ Le but de ce projet est de développer un proxy de sécurité pour la communicat
 3. Le proxy de sortie fait la requête HTTP au serveur web à la place du navigateur web
 4. Le proxy de sortie reçoit la réponse, la chiffre et la renvoie vers le proxy source
 5. Le proxy source renvoie finalement la réponse au navigateur qui affiche la page demandée.
-
-
-# Proxy de sécurité Web
 
 ## Fonctions de browser_handler:
 
