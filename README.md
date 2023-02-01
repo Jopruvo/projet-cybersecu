@@ -66,3 +66,8 @@ Ce code est un serveur proxy qui permet à un client de faire des requêtes HTTP
 Ce code implémente un serveur proxy qui permet aux clients de faire des requêtes HTTP et HTTPS en passant par un serveur proxy. Les connexions clientes sont gérées de manière asynchrone et les demandes sont transmises au serveur web cible en utilisant des sockets.
 
 
+
+## Difficultés rencontrées
+- On a réussi a l'implementer le proxy crypté pour des requette vers des site en http mais pas en https
+- Le temps d'éexecution en effet le proxy crypté est fonctionnelle en http mais reste trés long
+
